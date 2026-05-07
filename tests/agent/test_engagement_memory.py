@@ -46,7 +46,8 @@ def test_engagement_memory_uses_runtime_backend_config(tmp_path):
     assert "Backend: graphiti" in provider.system_prompt_block()
 
 
-def test_engagement_memory_mem0g_backend_queues_when_kuzu_unavailable(tmp_path):
+def test_engagement_memory_mem0g_backend_queues_when_kuzu_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr("plugins.memory.engagement.importlib.util.find_spec", lambda name: None)
     provider = EngagementMemoryProvider()
     provider.initialize("sess-4", hermes_home=str(tmp_path), platform="cli", engagement_config={"backend": "mem0g"})
 
@@ -55,6 +56,16 @@ def test_engagement_memory_mem0g_backend_queues_when_kuzu_unavailable(tmp_path):
     queue = tmp_path / "engagement-memory" / "mirror-queue.jsonl"
     assert queue.exists()
     assert '"backend": "mem0g"' in queue.read_text(encoding="utf-8")
+
+
+def test_engagement_memory_parses_auto_record_turns_false(tmp_path):
+    provider = EngagementMemoryProvider()
+    provider.initialize("sess-5", hermes_home=str(tmp_path), platform="cli", engagement_config={"auto_record_turns": "false"})
+
+    provider.sync_turn("user", "assistant", session_id="sess-5")
+
+    timeline = json.loads(provider.handle_tool_call("engagement_timeline", {}))
+    assert timeline["count"] == 0
 
 
 def test_core_engagement_memory_can_run_with_external_provider():

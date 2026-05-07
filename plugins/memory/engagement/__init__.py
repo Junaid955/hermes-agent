@@ -175,6 +175,20 @@ def _clean_text(value: Any, limit: int = _MAX_TEXT) -> str:
     return text.replace("\x00", "")[:limit]
 
 
+def _coerce_bool(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return False
+    return bool(value)
+
+
 def _load_config(hermes_home: str | Path | None = None) -> dict[str, Any]:
     home = Path(hermes_home) if hermes_home else None
     config = {
@@ -237,6 +251,7 @@ class EngagementMemoryProvider(MemoryProvider):
         runtime_cfg = kwargs.get("engagement_config") or {}
         if isinstance(runtime_cfg, dict):
             self._config.update({k: v for k, v in runtime_cfg.items() if v not in (None, "")})
+        self._config["auto_record_turns"] = _coerce_bool(self._config.get("auto_record_turns"), True)
         safe_session = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in self._session_id)[:120] or "default"
         self._store = EngagementStore(self._hermes_home / "engagement-memory" / f"{safe_session}.json")
         self._store.load()

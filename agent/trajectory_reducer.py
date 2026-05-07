@@ -22,6 +22,27 @@ _EDIT_TOOL_NAMES = {"write_file", "patch", "edit_file", "apply_patch"}
 _READ_TOOL_NAMES = {"read_file"}
 
 
+def _coerce_bool(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return False
+    return bool(value)
+
+
+def _coerce_nonnegative_int(value: Any, default: int) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass(frozen=True)
 class TrajectoryReductionConfig:
     enabled: bool = True
@@ -35,11 +56,11 @@ class TrajectoryReductionConfig:
         if not isinstance(value, dict):
             return cls()
         return cls(
-            enabled=bool(value.get("enabled", True)),
-            summarize_successful_tool_output=bool(value.get("summarize_successful_tool_output", True)),
-            purge_superseded_searches=bool(value.get("purge_superseded_searches", True)),
-            purge_superseded_file_reads=bool(value.get("purge_superseded_file_reads", True)),
-            min_success_output_chars=max(0, int(value.get("min_success_output_chars", 1200) or 0)),
+            enabled=_coerce_bool(value.get("enabled"), True),
+            summarize_successful_tool_output=_coerce_bool(value.get("summarize_successful_tool_output"), True),
+            purge_superseded_searches=_coerce_bool(value.get("purge_superseded_searches"), True),
+            purge_superseded_file_reads=_coerce_bool(value.get("purge_superseded_file_reads"), True),
+            min_success_output_chars=_coerce_nonnegative_int(value.get("min_success_output_chars"), 1200),
         )
 
 

@@ -66,3 +66,10 @@ def test_reducer_purges_file_read_superseded_by_edit():
     reduced = reduce_messages_for_api(messages)
 
     assert "superseded" in json.loads(reduced[1]["content"])["content"]
+
+
+def test_reducer_config_parses_false_strings():
+    config = TrajectoryReductionConfig.from_mapping({"enabled": "false", "min_success_output_chars": "not-an-int"})
+
+    assert config.enabled is False
+    assert config.min_success_output_chars == 1200
