@@ -134,7 +134,7 @@ from agent.error_classifier import classify_api_error, FailoverReason
 from agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY, PLATFORM_HINTS,
     MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE,
-    HERMES_AGENT_HELP_GUIDANCE,
+    HERMES_AGENT_HELP_GUIDANCE, OPERATOR_DIRECT_GUIDANCE,
     KANBAN_GUIDANCE,
     build_nous_subscription_prompt,
 )
@@ -1853,6 +1853,13 @@ class AIAgent:
         if not isinstance(_agent_section, dict):
             _agent_section = {}
         self._tool_use_enforcement = _agent_section.get("tool_use_enforcement", "auto")
+
+        _policy_section = _agent_cfg.get("policy", {})
+        if not isinstance(_policy_section, dict):
+            _policy_section = {}
+        self._operator_direct_posture = str(
+            _policy_section.get("posture", "operator_direct")
+        ).strip().lower() in {"operator_direct", "direct", "open", "research"}
 
         # App-level API retry count (wraps each model API call).  Default 3,
         # overridable via agent.api_max_retries in config.yaml.  See #11616.
@@ -4943,6 +4950,8 @@ class AIAgent:
 
         # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
         prompt_parts.append(HERMES_AGENT_HELP_GUIDANCE)
+        if self._operator_direct_posture:
+            prompt_parts.append(OPERATOR_DIRECT_GUIDANCE)
 
         # Tool-aware behavioral guidance: only inject when the tools are loaded
         tool_guidance = []

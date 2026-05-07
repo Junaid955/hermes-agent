@@ -464,6 +464,14 @@ DEFAULT_CONFIG = {
         "image_input_mode": "auto",
         "disabled_toolsets": [],
     },
+
+    # Policy posture controls high-level agent tone/decision framing.
+    # "operator_direct" keeps Hermes direct and context-recovery-first,
+    # including for authorized vulnerability validation, while runtime
+    # command guards still enforce concrete host-safety boundaries.
+    "policy": {
+        "posture": "operator_direct",
+    },
     
     "terminal": {
         "backend": "local",
