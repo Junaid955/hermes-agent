@@ -128,13 +128,14 @@ from tools.browser_tool import cleanup_browser
 
 # Agent internals extracted to agent/ package for modularity
 from agent.memory_manager import StreamingContextScrubber, build_memory_context_block, sanitize_context
+from agent.trajectory_reducer import TrajectoryReductionConfig, reduce_messages_for_api
 from agent.think_scrubber import StreamingThinkScrubber
 from agent.retry_utils import jittered_backoff
 from agent.error_classifier import classify_api_error, FailoverReason
 from agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY, PLATFORM_HINTS,
     MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE,
-    HERMES_AGENT_HELP_GUIDANCE,
+    HERMES_AGENT_HELP_GUIDANCE, OPERATOR_DIRECT_GUIDANCE,
     KANBAN_GUIDANCE,
     build_nous_subscription_prompt,
 )
@@ -1754,26 +1755,36 @@ class AIAgent:
         
 
 
-        # Memory provider plugin (external — one at a time, alongside built-in)
-        # Reads memory.provider from config to select which plugin to activate.
+        # Memory provider plugins. Core engagement memory can run alongside one
+        # optional external provider selected by memory.provider.
         self._memory_manager = None
         if not skip_memory:
+            from agent.memory_manager import MemoryManager as _MemoryManager
+            from plugins.memory import load_memory_provider as _load_mem
             try:
                 _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
+                _engagement_cfg = mem_config.get("engagement", {}) if isinstance(mem_config, dict) else {}
+                _engagement_enabled = True
+                if isinstance(_engagement_cfg, dict):
+                    _engagement_enabled = bool(_engagement_cfg.get("enabled", True))
 
-                if _mem_provider_name:
-                    from agent.memory_manager import MemoryManager as _MemoryManager
-                    from plugins.memory import load_memory_provider as _load_mem
+                if _mem_provider_name or _engagement_enabled:
                     self._memory_manager = _MemoryManager()
-                    _mp = _load_mem(_mem_provider_name)
-                    if _mp and _mp.is_available():
-                        self._memory_manager.add_provider(_mp)
+                    if _engagement_enabled:
+                        _engagement = _load_mem("engagement")
+                        if _engagement and _engagement.is_available():
+                            self._memory_manager.add_provider(_engagement)
+                    if _mem_provider_name and _mem_provider_name != "engagement":
+                        _mp = _load_mem(_mem_provider_name)
+                        if _mp and _mp.is_available():
+                            self._memory_manager.add_provider(_mp)
                     if self._memory_manager.providers:
                         _init_kwargs = {
                             "session_id": self.session_id,
                             "platform": platform or "cli",
                             "hermes_home": str(get_hermes_home()),
                             "agent_context": "primary",
+                            "engagement_config": _engagement_cfg if isinstance(_engagement_cfg, dict) else {},
                         }
                         # Thread session title for memory provider scoping
                         # (e.g. honcho uses this to derive chat-scoped session keys)
@@ -1809,9 +1820,12 @@ class AIAgent:
                         except Exception:
                             pass
                         self._memory_manager.initialize_all(**_init_kwargs)
-                        logger.info("Memory provider '%s' activated", _mem_provider_name)
+                        logger.info(
+                            "Memory providers activated: %s",
+                            ", ".join(p.name for p in self._memory_manager.providers),
+                        )
                     else:
-                        logger.debug("Memory provider '%s' not found or not available", _mem_provider_name)
+                        logger.debug("No memory providers found or available")
                         self._memory_manager = None
             except Exception as _mpe:
                 logger.warning("Memory provider plugin init failed: %s", _mpe)
@@ -1853,6 +1867,20 @@ class AIAgent:
         if not isinstance(_agent_section, dict):
             _agent_section = {}
         self._tool_use_enforcement = _agent_section.get("tool_use_enforcement", "auto")
+
+        _policy_section = _agent_cfg.get("policy", {})
+        if not isinstance(_policy_section, dict):
+            _policy_section = {}
+        self._operator_direct_posture = str(
+            _policy_section.get("posture", "operator_direct")
+        ).strip().lower() in {"operator_direct", "direct", "open", "research"}
+
+        _context_section = _agent_cfg.get("context", {})
+        if not isinstance(_context_section, dict):
+            _context_section = {}
+        self._trajectory_reduction_config = TrajectoryReductionConfig.from_mapping(
+            _context_section.get("trajectory_reduction", {})
+        )
 
         # App-level API retry count (wraps each model API call).  Default 3,
         # overridable via agent.api_max_retries in config.yaml.  See #11616.
@@ -4943,6 +4971,8 @@ class AIAgent:
 
         # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
         prompt_parts.append(HERMES_AGENT_HELP_GUIDANCE)
+        if self._operator_direct_posture:
+            prompt_parts.append(OPERATOR_DIRECT_GUIDANCE)
 
         # Tool-aware behavioral guidance: only inject when the tools are loaded
         tool_guidance = []
@@ -10421,6 +10451,10 @@ class AIAgent:
             # Same safety net as the main loop: drop thinking-only assistant
             # turns so Anthropic-family providers don't 400 the summary call.
             api_messages = self._drop_thinking_only_and_merge_users(api_messages)
+            api_messages = reduce_messages_for_api(
+                api_messages,
+                getattr(self, "_trajectory_reduction_config", TrajectoryReductionConfig()),
+            )
 
             summary_extra_body = {}
             try:
@@ -11211,6 +11245,14 @@ class AIAgent:
                             )
                     new_tcs.append(tc)
                 am["tool_calls"] = new_tcs
+
+            # Trajectory reduction runs on the API copy only. It collapses
+            # verbose successful tool output, superseded search attempts, and
+            # stale file snapshots without changing persisted conversation state.
+            api_messages = reduce_messages_for_api(
+                api_messages,
+                getattr(self, "_trajectory_reduction_config", TrajectoryReductionConfig()),
+            )
 
             # Proactively strip any surrogate characters before the API call.
             # Models served via Ollama (Kimi K2.5, GLM-5, Qwen) can return

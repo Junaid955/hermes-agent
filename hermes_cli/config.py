@@ -464,6 +464,14 @@ DEFAULT_CONFIG = {
         "image_input_mode": "auto",
         "disabled_toolsets": [],
     },
+
+    # Policy posture controls high-level agent tone/decision framing.
+    # "operator_direct" keeps Hermes direct and context-recovery-first,
+    # including for authorized vulnerability validation, while runtime
+    # command guards still enforce concrete host-safety boundaries.
+    "policy": {
+        "posture": "operator_direct",
+    },
     
     "terminal": {
         "backend": "local",
@@ -952,6 +960,13 @@ DEFAULT_CONFIG = {
     # a plugin in plugins/context_engine/<name>/ or ~/.hermes/plugins/.
     "context": {
         "engine": "compressor",
+        "trajectory_reduction": {
+            "enabled": True,
+            "summarize_successful_tool_output": True,
+            "purge_superseded_searches": True,
+            "purge_superseded_file_reads": True,
+            "min_success_output_chars": 1200,
+        },
     },
 
     # Persistent memory -- bounded curated memory injected into system prompt
@@ -963,8 +978,13 @@ DEFAULT_CONFIG = {
         # External memory provider plugin (empty = built-in only).
         # Set to a provider name to activate: "openviking", "mem0",
         # "hindsight", "holographic", "retaindb", "byterover".
-        # Only ONE external provider is allowed at a time.
+        # Only ONE external provider is allowed at a time. Core engagement
+        # memory can run alongside one external provider.
         "provider": "",
+        "engagement": {
+            "enabled": True,
+            "backend": "local",  # local | kuzu | mem0g | graphiti | mem0; local-first either way
+        },
     },
 
     # Subagent delegation — override the provider:model used by delegate_task

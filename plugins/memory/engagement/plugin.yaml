@@ -1,0 +1,3 @@
+name: engagement
+description: Temporal engagement memory for security assessments with optional Graphiti/Zep or Mem0 mirroring.
+kind: memory-provider

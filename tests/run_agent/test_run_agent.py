@@ -21,7 +21,7 @@ from agent.codex_responses_adapter import _chat_messages_to_responses_input, _no
 import run_agent
 from run_agent import AIAgent
 from agent.error_classifier import FailoverReason
-from agent.prompt_builder import DEFAULT_AGENT_IDENTITY
+from agent.prompt_builder import DEFAULT_AGENT_IDENTITY, OPERATOR_DIRECT_GUIDANCE
 
 
 # ---------------------------------------------------------------------------
@@ -940,6 +940,41 @@ class TestBuildSystemPrompt:
         assert "SKILLS_PROMPT" in prompt
         assert mock_skills.call_args.kwargs["available_tools"] == set(toolset_map)
         assert mock_skills.call_args.kwargs["available_toolsets"] == {"web", "skills"}
+
+
+class TestOperatorDirectPolicy:
+    """Tests for the policy.posture operator-direct system prompt block."""
+
+    def _make_agent(self, policy=None):
+        cfg = {"agent": {"tool_use_enforcement": False}}
+        if policy is not None:
+            cfg["policy"] = policy
+        with (
+            patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI"),
+            patch("hermes_cli.config.load_config", return_value=cfg),
+        ):
+            a = AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://openrouter.ai/api/v1",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+            )
+            a.client = MagicMock()
+            return a
+
+    def test_operator_direct_guidance_injected_by_default(self):
+        agent = self._make_agent()
+        prompt = agent._build_system_prompt()
+        assert OPERATOR_DIRECT_GUIDANCE in prompt
+        assert "authorized environment" in prompt
+
+    def test_operator_direct_guidance_can_be_disabled(self):
+        agent = self._make_agent(policy={"posture": "default"})
+        prompt = agent._build_system_prompt()
+        assert OPERATOR_DIRECT_GUIDANCE not in prompt
 
 
 class TestToolUseEnforcementConfig:
