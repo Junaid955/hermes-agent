@@ -1754,26 +1754,36 @@ class AIAgent:
         
 
 
-        # Memory provider plugin (external — one at a time, alongside built-in)
-        # Reads memory.provider from config to select which plugin to activate.
+        # Memory provider plugins. Core engagement memory can run alongside one
+        # optional external provider selected by memory.provider.
         self._memory_manager = None
         if not skip_memory:
+            from agent.memory_manager import MemoryManager as _MemoryManager
+            from plugins.memory import load_memory_provider as _load_mem
             try:
                 _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
+                _engagement_cfg = mem_config.get("engagement", {}) if isinstance(mem_config, dict) else {}
+                _engagement_enabled = True
+                if isinstance(_engagement_cfg, dict):
+                    _engagement_enabled = bool(_engagement_cfg.get("enabled", True))
 
-                if _mem_provider_name:
-                    from agent.memory_manager import MemoryManager as _MemoryManager
-                    from plugins.memory import load_memory_provider as _load_mem
+                if _mem_provider_name or _engagement_enabled:
                     self._memory_manager = _MemoryManager()
-                    _mp = _load_mem(_mem_provider_name)
-                    if _mp and _mp.is_available():
-                        self._memory_manager.add_provider(_mp)
+                    if _engagement_enabled:
+                        _engagement = _load_mem("engagement")
+                        if _engagement and _engagement.is_available():
+                            self._memory_manager.add_provider(_engagement)
+                    if _mem_provider_name and _mem_provider_name != "engagement":
+                        _mp = _load_mem(_mem_provider_name)
+                        if _mp and _mp.is_available():
+                            self._memory_manager.add_provider(_mp)
                     if self._memory_manager.providers:
                         _init_kwargs = {
                             "session_id": self.session_id,
                             "platform": platform or "cli",
                             "hermes_home": str(get_hermes_home()),
                             "agent_context": "primary",
+                            "engagement_config": _engagement_cfg if isinstance(_engagement_cfg, dict) else {},
                         }
                         # Thread session title for memory provider scoping
                         # (e.g. honcho uses this to derive chat-scoped session keys)
@@ -1809,9 +1819,12 @@ class AIAgent:
                         except Exception:
                             pass
                         self._memory_manager.initialize_all(**_init_kwargs)
-                        logger.info("Memory provider '%s' activated", _mem_provider_name)
+                        logger.info(
+                            "Memory providers activated: %s",
+                            ", ".join(p.name for p in self._memory_manager.providers),
+                        )
                     else:
-                        logger.debug("Memory provider '%s' not found or not available", _mem_provider_name)
+                        logger.debug("No memory providers found or available")
                         self._memory_manager = None
             except Exception as _mpe:
                 logger.warning("Memory provider plugin init failed: %s", _mpe)

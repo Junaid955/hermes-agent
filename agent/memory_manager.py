@@ -204,13 +204,15 @@ class MemoryManager:
     def add_provider(self, provider: MemoryProvider) -> None:
         """Register a memory provider.
 
-        Built-in provider (name ``"builtin"``) is always accepted.
-        Only **one** external (non-builtin) provider is allowed — a second
+        Built-in provider (name ``"builtin"``) and core providers
+        (``core_provider = True``) are always accepted.
+        Only **one** external non-core provider is allowed — a second
         attempt is rejected with a warning.
         """
         is_builtin = provider.name == "builtin"
+        is_core = bool(getattr(provider, "core_provider", False))
 
-        if not is_builtin:
+        if not is_builtin and not is_core:
             if self._has_external:
                 existing = next(
                     (p.name for p in self._providers if p.name != "builtin"), "unknown"

@@ -971,8 +971,13 @@ DEFAULT_CONFIG = {
         # External memory provider plugin (empty = built-in only).
         # Set to a provider name to activate: "openviking", "mem0",
         # "hindsight", "holographic", "retaindb", "byterover".
-        # Only ONE external provider is allowed at a time.
+        # Only ONE external provider is allowed at a time. Core engagement
+        # memory can run alongside one external provider.
         "provider": "",
+        "engagement": {
+            "enabled": True,
+            "backend": "local",  # local | graphiti | mem0; local-first either way
+        },
     },
 
     # Subagent delegation — override the provider:model used by delegate_task
