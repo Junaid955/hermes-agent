@@ -9,7 +9,7 @@ metadata:
     tags: [kali, penetration-testing, vulnerability-assessment, authorized-testing, red-team, reporting, malware-analysis, edr-validation, credential-audit, c2-detection, prompt-injection-testing]
     category: red-teaming
     related_skills: [godmode]
-    requires_tools: [terminal, process, read_file, write_file, search_files, web_search, saas_bola_assess]
+    requires_tools: [terminal, process, read_file, write_file, search_files, web_search, saas_bola_assess, static_analysis_service]
 ---
 
 # Kali Authorized Assessment Operator Workflow
@@ -91,6 +91,19 @@ Generate targeted wordlists from observed routes, JavaScript, OpenAPI specs, rob
 - Use the `process` tool for long-running commands and listeners so they remain attached to the session and can be checked, written to, or stopped later.
 - Always name the purpose of a listener/process in notes and record ports, PIDs, log paths, and cleanup steps.
 
+
+## Static analysis workflow (Semgrep + CodeQL)
+
+When source code is in scope, add a static-analysis pass before active validation:
+
+1. Use `static_analysis_service(action="check_environment")` to confirm whether `git`, `semgrep`, and `codeql` are installed and to find the Hermes static-analysis workspace.
+2. Use `static_analysis_service(action="ingest_code", source="...", source_type="auto")` for approved Git repositories, zip archives, or local source directories. Keep cloned/extracted code under the engagement workspace or the Hermes static-analysis workspace.
+3. Use `static_analysis_service(action="semgrep_scan", target_path="...", semgrep_config="auto")` for fast credential hunting, insecure API usage checks, and broad low-hanging-fruit review. If you discover a repeatable pattern, generate a focused rule with `static_analysis_service(action="write_semgrep_rule", rule_name="...", pattern="...", languages=[...])` and rescan the whole codebase.
+4. Use `static_analysis_service(action="map_api_endpoints", target_path="...")` to build an API route map for SaaS/API authorization testing and to seed later BOLA/IDOR replay planning.
+5. Use `static_analysis_service(action="codeql_plan", target_path="...", language="...")` to produce reproducible CodeQL database/query commands. For suspected SSRF, SQL injection, path traversal, or permission-change logic flaws, scaffold a review query with `static_analysis_service(action="write_codeql_query", query_type="ssrf|sql_injection|path_traversal|permission_change", language="...")`.
+6. Build CodeQL databases and run queries only when the code owner/engagement permits local compilation/indexing. Treat CodeQL hits as evidence candidates until manually reviewed against sanitizers, authorization gates, and framework behavior.
+
+Use static-analysis output to prioritize validation and reduce noisy active testing; do not claim exploitability solely from a static finding.
 
 ## SaaS BOLA/IDOR workflow
 
