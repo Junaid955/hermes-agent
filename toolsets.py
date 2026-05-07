@@ -54,6 +54,8 @@ _HERMES_CORE_TOOLS = [
     "clarify",
     # Code execution + delegation
     "execute_code", "delegate_task",
+    # SaaS authorization testing helpers
+    "saas_bola_assess",
     # Cronjob management
     "cronjob",
     # Cross-platform messaging (gated on gateway running via check_fn)
@@ -111,6 +113,12 @@ TOOLSETS = {
     "moa": {
         "description": "Advanced reasoning and problem-solving tools",
         "tools": ["mixture_of_agents"],
+        "includes": []
+    },
+
+    "saas_security": {
+        "description": "Authorized SaaS BOLA/IDOR traffic analysis and identity-context replay planning",
+        "tools": ["saas_bola_assess"],
         "includes": []
     },
     

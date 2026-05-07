@@ -9,7 +9,7 @@ metadata:
     tags: [kali, penetration-testing, vulnerability-assessment, authorized-testing, red-team, reporting, malware-analysis, edr-validation, credential-audit, c2-detection, prompt-injection-testing]
     category: red-teaming
     related_skills: [godmode]
-    requires_tools: [terminal, process, read_file, write_file, search_files, web_search]
+    requires_tools: [terminal, process, read_file, write_file, search_files, web_search, saas_bola_assess]
 ---
 
 # Kali Authorized Assessment Operator Workflow
@@ -90,6 +90,19 @@ Generate targeted wordlists from observed routes, JavaScript, OpenAPI specs, rob
 
 - Use the `process` tool for long-running commands and listeners so they remain attached to the session and can be checked, written to, or stopped later.
 - Always name the purpose of a listener/process in notes and record ports, PIDs, log paths, and cleanup steps.
+
+
+## SaaS BOLA/IDOR workflow
+
+When testing a SaaS or SPA target, prioritize identity mapping and API relationship discovery over port scanning:
+
+1. Use `saas_bola_assess(action="check_environment")` to see whether `mitmdump` and Playwright tooling are available.
+2. Use `saas_bola_assess(action="capture_plan", target_url="https://...")` to produce the proxy/browser capture plan, then run the listed capture commands with the `process` tool when the operator has authenticated approved test accounts.
+3. Export captured traffic to HAR or JSON and call `saas_bola_assess(action="analyze_traffic", traffic_file="...")` to identify UUIDs, organization/workspace IDs, JWT claim structure, GraphQL operations, and replay candidates.
+4. Call `saas_bola_assess(action="build_replay_plan", traffic_file="...", owner_context="Context_A", alternate_context="Context_B")` to generate targeted BOLA replay candidates.
+5. After approved manual/tool replay, call `saas_bola_assess(action="compare_replay_results", owner_response={...}, alternate_response={...}, object_ids=[...])` to classify possible authorization failures.
+
+Do not silently replace webhook destinations, register OAuth applications for persistence, or alter third-party integrations. For integration testing, document the risk and use benign canary endpoints, explicit operator approval, and reversible changes only.
 
 ## High-risk capability handling
 
