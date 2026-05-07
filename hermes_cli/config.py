@@ -960,6 +960,13 @@ DEFAULT_CONFIG = {
     # a plugin in plugins/context_engine/<name>/ or ~/.hermes/plugins/.
     "context": {
         "engine": "compressor",
+        "trajectory_reduction": {
+            "enabled": True,
+            "summarize_successful_tool_output": True,
+            "purge_superseded_searches": True,
+            "purge_superseded_file_reads": True,
+            "min_success_output_chars": 1200,
+        },
     },
 
     # Persistent memory -- bounded curated memory injected into system prompt
@@ -976,7 +983,7 @@ DEFAULT_CONFIG = {
         "provider": "",
         "engagement": {
             "enabled": True,
-            "backend": "local",  # local | graphiti | mem0; local-first either way
+            "backend": "local",  # local | kuzu | mem0g | graphiti | mem0; local-first either way
         },
     },
 

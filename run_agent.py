@@ -128,6 +128,7 @@ from tools.browser_tool import cleanup_browser
 
 # Agent internals extracted to agent/ package for modularity
 from agent.memory_manager import StreamingContextScrubber, build_memory_context_block, sanitize_context
+from agent.trajectory_reducer import TrajectoryReductionConfig, reduce_messages_for_api
 from agent.think_scrubber import StreamingThinkScrubber
 from agent.retry_utils import jittered_backoff
 from agent.error_classifier import classify_api_error, FailoverReason
@@ -1873,6 +1874,13 @@ class AIAgent:
         self._operator_direct_posture = str(
             _policy_section.get("posture", "operator_direct")
         ).strip().lower() in {"operator_direct", "direct", "open", "research"}
+
+        _context_section = _agent_cfg.get("context", {})
+        if not isinstance(_context_section, dict):
+            _context_section = {}
+        self._trajectory_reduction_config = TrajectoryReductionConfig.from_mapping(
+            _context_section.get("trajectory_reduction", {})
+        )
 
         # App-level API retry count (wraps each model API call).  Default 3,
         # overridable via agent.api_max_retries in config.yaml.  See #11616.
@@ -10443,6 +10451,10 @@ class AIAgent:
             # Same safety net as the main loop: drop thinking-only assistant
             # turns so Anthropic-family providers don't 400 the summary call.
             api_messages = self._drop_thinking_only_and_merge_users(api_messages)
+            api_messages = reduce_messages_for_api(
+                api_messages,
+                getattr(self, "_trajectory_reduction_config", TrajectoryReductionConfig()),
+            )
 
             summary_extra_body = {}
             try:
@@ -11233,6 +11245,14 @@ class AIAgent:
                             )
                     new_tcs.append(tc)
                 am["tool_calls"] = new_tcs
+
+            # Trajectory reduction runs on the API copy only. It collapses
+            # verbose successful tool output, superseded search attempts, and
+            # stale file snapshots without changing persisted conversation state.
+            api_messages = reduce_messages_for_api(
+                api_messages,
+                getattr(self, "_trajectory_reduction_config", TrajectoryReductionConfig()),
+            )
 
             # Proactively strip any surrogate characters before the API call.
             # Models served via Ollama (Kimi K2.5, GLM-5, Qwen) can return

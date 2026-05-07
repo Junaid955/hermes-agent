@@ -9,6 +9,8 @@ mirroring can be enabled by config/env, but local storage is always available.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import json
 import logging
 import os
@@ -221,7 +223,7 @@ class EngagementMemoryProvider(MemoryProvider):
 
     def get_config_schema(self):
         return [
-            {"key": "backend", "description": "Mirror backend: local, graphiti, or mem0", "default": "local", "choices": ["local", "graphiti", "mem0"]},
+            {"key": "backend", "description": "Mirror backend: local, kuzu/mem0g, graphiti, or mem0", "default": "local", "choices": ["local", "kuzu", "mem0g", "graphiti", "mem0"]},
             {"key": "graphiti_url", "description": "Optional Graphiti/Zep endpoint URL", "default": "", "env_var": "GRAPHITI_URL"},
             {"key": "zep_api_key", "description": "Optional Zep API key for Graphiti mirroring", "secret": True, "required": False, "env_var": "ZEP_API_KEY"},
             {"key": "auto_record_turns", "description": "Record completed user/assistant turns as timeline events", "default": "true", "choices": ["true", "false"]},
@@ -357,12 +359,50 @@ class EngagementMemoryProvider(MemoryProvider):
         backend = str(self._config.get("backend", "local")).lower()
         if backend == "local":
             return
+        if backend in {"kuzu", "mem0g"} and self._mirror_to_kuzu(event):
+            return
         try:
             mirror_path = (self._hermes_home or Path.home() / ".hermes") / "engagement-memory" / "mirror-queue.jsonl"
             mirror_path.parent.mkdir(parents=True, exist_ok=True)
             mirror_path.open("a", encoding="utf-8").write(json.dumps({"backend": backend, "event": event}, ensure_ascii=False) + "\n")
         except Exception as exc:
             logger.debug("engagement memory mirror queue failed: %s", exc)
+
+    def _mirror_to_kuzu(self, event: dict[str, Any]) -> bool:
+        if importlib.util.find_spec("kuzu") is None:
+            return False
+        kuzu = importlib.import_module("kuzu")
+        try:
+            db_path = (self._hermes_home or Path.home() / ".hermes") / "engagement-memory" / "kuzu"
+            db_path.mkdir(parents=True, exist_ok=True)
+            db = kuzu.Database(str(db_path))
+            conn = kuzu.Connection(db)
+            conn.execute("CREATE NODE TABLE IF NOT EXISTS Event(id STRING, observed_at STRING, event_type STRING, summary STRING, PRIMARY KEY(id))")
+            conn.execute("CREATE NODE TABLE IF NOT EXISTS Entity(id STRING, type STRING, name STRING, state STRING, updated_at STRING, PRIMARY KEY(id))")
+            conn.execute("CREATE REL TABLE IF NOT EXISTS RELATED(FROM Entity TO Entity, relation STRING, observed_at STRING, event_id STRING)")
+            conn.execute("CREATE (:Event {id: $id, observed_at: $observed_at, event_type: $event_type, summary: $summary})", {
+                "id": event.get("id", ""),
+                "observed_at": event.get("observed_at", ""),
+                "event_type": event.get("event_type", ""),
+                "summary": event.get("summary", ""),
+            })
+            for entity in event.get("entities", []):
+                if not isinstance(entity, dict):
+                    continue
+                entity_id = str(entity.get("id") or entity.get("name") or "").strip()
+                if not entity_id:
+                    continue
+                conn.execute("CREATE (:Entity {id: $id, type: $type, name: $name, state: $state, updated_at: $updated_at})", {
+                    "id": entity_id,
+                    "type": str(entity.get("type", "")),
+                    "name": str(entity.get("name", entity_id)),
+                    "state": str(entity.get("state", "")),
+                    "updated_at": event.get("observed_at", ""),
+                })
+            return True
+        except Exception as exc:
+            logger.debug("engagement memory Kuzu mirror failed: %s", exc)
+            return False
 
 
 def register_memory_provider():

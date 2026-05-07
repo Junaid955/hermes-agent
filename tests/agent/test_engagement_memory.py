@@ -46,6 +46,17 @@ def test_engagement_memory_uses_runtime_backend_config(tmp_path):
     assert "Backend: graphiti" in provider.system_prompt_block()
 
 
+def test_engagement_memory_mem0g_backend_queues_when_kuzu_unavailable(tmp_path):
+    provider = EngagementMemoryProvider()
+    provider.initialize("sess-4", hermes_home=str(tmp_path), platform="cli", engagement_config={"backend": "mem0g"})
+
+    provider.handle_tool_call("engagement_record", {"event_type": "finding", "summary": "graph candidate"})
+
+    queue = tmp_path / "engagement-memory" / "mirror-queue.jsonl"
+    assert queue.exists()
+    assert '"backend": "mem0g"' in queue.read_text(encoding="utf-8")
+
+
 def test_core_engagement_memory_can_run_with_external_provider():
     manager = MemoryManager()
     engagement = FakeMemoryProvider("engagement")
