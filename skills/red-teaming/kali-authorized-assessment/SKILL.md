@@ -6,7 +6,7 @@ author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [kali, penetration-testing, vulnerability-assessment, authorized-testing, red-team, reporting]
+    tags: [kali, penetration-testing, vulnerability-assessment, authorized-testing, red-team, reporting, malware-analysis, edr-validation, credential-audit, c2-detection, prompt-injection-testing]
     category: red-teaming
     related_skills: [godmode]
     requires_tools: [terminal, process, read_file, write_file, search_files, web_search]
@@ -90,6 +90,45 @@ Generate targeted wordlists from observed routes, JavaScript, OpenAPI specs, rob
 
 - Use the `process` tool for long-running commands and listeners so they remain attached to the session and can be checked, written to, or stopped later.
 - Always name the purpose of a listener/process in notes and record ports, PIDs, log paths, and cleanup steps.
+
+## High-risk capability handling
+
+The operator may ask about malware, EDR, credentials, prompt-injection lateral movement, or C2 because these topics appear in real client assessments. Handle them as controlled validation domains, not as unrestricted abuse automation.
+
+### Malware and payload analysis
+
+- Support reverse engineering, triage, containment, and detection engineering for samples the operator provides or creates in a lab.
+- Prefer static/dynamic analysis tooling such as `file`, `strings`, `exiftool`, `binwalk`, `capa`, `floss`, `yara`, `r2`, Ghidra headless, `strace`, `ltrace`, `tcpdump`, and sandbox logs.
+- Produce IOCs, behavior summaries, YARA/Sigma-style detections, and remediation notes.
+- Do not generate or deploy malware, persistence, destructive payloads, stealth droppers, or payloads intended to evade detection outside a clearly authorized lab validation plan.
+
+### EDR and control validation
+
+- Frame EDR work as control validation: confirm whether the client's tools detect agreed benign simulations and documented test procedures.
+- Prefer safe emulation frameworks and transparent test artifacts in isolated lab or approved client ranges; record command, expected signal, observed alert, and cleanup.
+- If the user asks for bypasses, convert the request into a validation plan: identify the detection goal, run benign or vendor-approved simulations, and report coverage gaps.
+- Do not create stealth malware, AV/EDR bypass loaders, credential dumpers, or evasion code.
+
+### Credential exposure and abuse prevention
+
+- Treat credentials, hashes, tokens, cookies, and key material as sensitive evidence.
+- Validate exposure with the least-invasive method: metadata proof, hash identification, test-account login, or scoped single-service check when RoE explicitly allows it.
+- Mask secrets in chat and reports unless the operator explicitly requests disclosure and the RoE allows handling raw secrets.
+- Do not perform credential stuffing, broad password spraying, token replay, or cross-service reuse testing unless the RoE gives explicit target lists, accounts, rate limits, and written approval.
+
+### Prompt-injection and agentic lateral-movement assessment
+
+- Assess owned/internal AI systems with benign canary instructions and non-sensitive proof markers.
+- Map agent/tool boundaries: what data the target AI reads, which tools it can call, and whether instructions in data can influence tool use.
+- Demonstrate impact with harmless markers such as writing a canary file in a lab workspace, requesting a non-secret environment variable name list, or producing an audit log entry.
+- Do not plant malicious instructions that exfiltrate secrets, alter production data, establish persistence, or cause downstream agents to attack third-party systems.
+
+### C2 and beaconing assessment
+
+- Support defensive C2 detection engineering: lab beacons, traffic-shape documentation, SIEM rule validation, firewall/proxy telemetry checks, and cleanup verification.
+- Keep callbacks inside approved lab infrastructure or explicitly allowlisted client ranges.
+- Prefer synthetic indicators and benign heartbeat scripts over backdoors.
+- Do not deploy unauthorized remote-access tooling, botnet behavior, persistence, or covert channels.
 
 ## Evidence and reporting artifacts
 
